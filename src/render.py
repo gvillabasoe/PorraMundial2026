@@ -7,23 +7,38 @@ from typing import Any
 
 import streamlit as st
 
-from .config import (
-    FINAL_TABLE_COLUMNS,
-    FLAG_FILES,
-    GROUP_COLORS,
-    LOGO_PATH,
-    NEGATIVE_METRIC_LABELS,
-    POSITIVE_METRIC_LABELS,
-    STAGE_CONFIGS,
-    TEAM_DISPLAY,
-)
-from .data import MetricResult, display_value, format_number, format_percent
+try:
+    from .config import (
+        FINAL_TABLE_COLUMNS,
+        FLAG_FILES,
+        GROUP_COLORS,
+        LOGO_PATH,
+        NEGATIVE_METRIC_LABELS,
+        POSITIVE_METRIC_LABELS,
+        STAGE_CONFIGS,
+        TEAM_DISPLAY,
+    )
+    from .data import MetricResult, display_value, format_number, format_percent
+except ImportError:
+    from config import (
+        FINAL_TABLE_COLUMNS,
+        FLAG_FILES,
+        GROUP_COLORS,
+        LOGO_PATH,
+        NEGATIVE_METRIC_LABELS,
+        POSITIVE_METRIC_LABELS,
+        STAGE_CONFIGS,
+        TEAM_DISPLAY,
+    )
+    from data import MetricResult, display_value, format_number, format_percent
 
 
 @st.cache_data(show_spinner=False)
 def image_to_base64(path_str: str) -> str:
     path = Path(path_str)
-    return base64.b64encode(path.read_bytes()).decode("utf-8")
+    if not path.exists():
+        return ''
+    return base64.b64encode(path.read_bytes()).decode('utf-8')
 
 
 def inject_global_styles() -> None:
@@ -569,8 +584,10 @@ def flag_label(team: str, size: str = "") -> str:
     if display_value(team) == "Pendiente":
         return '<span class="plain-value">Pendiente</span>'
 
-    if team in FLAG_FILES and FLAG_FILES[team].exists():
+    if team in FLAG_FILES and FLAG_FILES[team] is not None and FLAG_FILES[team].exists():
         image_b64 = image_to_base64(str(FLAG_FILES[team]))
+        if not image_b64:
+            return f'<span class="plain-value">{escape(team_display_name(team))}</span>'
         display_name = escape(team_display_name(team))
         size_class = f" {size}" if size else ""
         return (
@@ -594,11 +611,17 @@ def final_pair_html(pair: tuple[str, str]) -> str:
 
 
 def render_header() -> None:
-    logo_b64 = image_to_base64(str(LOGO_PATH))
+    logo_html = ''
+    if LOGO_PATH is not None and Path(LOGO_PATH).exists():
+        logo_b64 = image_to_base64(str(LOGO_PATH))
+        if logo_b64:
+            extension = Path(LOGO_PATH).suffix.lower()
+            mime = 'image/webp' if extension == '.webp' else 'image/png'
+            logo_html = f'<img class="hero-logo" src="data:{mime};base64,{logo_b64}" alt="Peñita FIFA World Cup 2026">'
     st.markdown(
         f"""
         <div class="hero-card">
-            <img class="hero-logo" src="data:image/webp;base64,{logo_b64}" alt="Peñita FIFA World Cup 2026">
+            {logo_html}
             <div class="hero-title">Peñita FIFA World Cup 2026</div>
         </div>
         """,

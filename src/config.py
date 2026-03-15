@@ -1,13 +1,46 @@
 from __future__ import annotations
 
 import os
+import unicodedata
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_PATH = Path(os.getenv("PORRA_CSV_PATH", BASE_DIR / "data" / "porra_mundial_muestra_40.csv"))
+THIS_DIR = Path(__file__).resolve().parent
+BASE_DIR = THIS_DIR.parent if THIS_DIR.name == "src" else THIS_DIR
 ASSETS_DIR = BASE_DIR / "assets"
 FLAG_DIR = ASSETS_DIR / "flags"
-LOGO_PATH = ASSETS_DIR / "logo" / "logo.webp"
+LOGO_DIR = ASSETS_DIR / "logo"
+DATA_DIR = BASE_DIR / "data"
+IMAGE_EXTENSIONS = {".png", ".webp", ".jpg", ".jpeg", ".svg"}
+
+
+def _normalize_key(value: str) -> str:
+    text = unicodedata.normalize("NFKD", str(value))
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    for token in [" ", "_", "-", ".", "'", '"']:
+        text = text.replace(token, "")
+    return text.lower()
+
+
+def _existing_path(candidates: list[Path | str | None]) -> Path | None:
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        path = Path(candidate)
+        if path.exists():
+            return path
+    return None
+
+
+def _search_dirs() -> list[Path]:
+    dirs = [
+        FLAG_DIR,
+        LOGO_DIR,
+        DATA_DIR,
+        ASSETS_DIR,
+        BASE_DIR,
+    ]
+    return [path for path in dirs if path.exists()]
+
 
 GROUP_COLORS = {
     "A": "#6BBF78",
@@ -90,7 +123,50 @@ TEAM_DISPLAY = {
     "Uzbekistan": "Uzbekistán",
 }
 
-FLAG_FILES = {team: FLAG_DIR / f"{team}.png" for team in TEAM_DISPLAY}
+
+def _build_image_index() -> dict[str, Path]:
+    index: dict[str, Path] = {}
+    for directory in _search_dirs():
+        for file in directory.glob('*'):
+            if not file.is_file() or file.suffix.lower() not in IMAGE_EXTENSIONS:
+                continue
+            key = _normalize_key(file.stem)
+            index.setdefault(key, file)
+    return index
+
+
+_IMAGE_INDEX = _build_image_index()
+
+
+def resolve_flag_path(team: str) -> Path | None:
+    candidates = [team, TEAM_DISPLAY.get(team, team)]
+    for candidate in candidates:
+        path = _IMAGE_INDEX.get(_normalize_key(candidate))
+        if path is not None:
+            return path
+    return None
+
+
+FLAG_FILES = {team: resolve_flag_path(team) for team in TEAM_DISPLAY}
+
+LOGO_PATH = _existing_path([
+    LOGO_DIR / 'logo.webp',
+    LOGO_DIR / 'logo.png',
+    BASE_DIR / 'logo.webp',
+    BASE_DIR / 'logo.png',
+    BASE_DIR / 'OIP.webp',
+    BASE_DIR / 'OIP.png',
+])
+
+DATA_PATH = _existing_path([
+    Path(os.getenv('PORRA_CSV_PATH')) if os.getenv('PORRA_CSV_PATH') else None,
+    DATA_DIR / 'porra_mundial_muestra_40.csv',
+    DATA_DIR / 'Plantilla_Mundial_muestra_50_nicknames.csv',
+    BASE_DIR / 'porra_mundial_muestra_40.csv',
+    BASE_DIR / 'Plantilla_Mundial_muestra_50_nicknames.csv',
+    DATA_DIR / 'Plantilla_Mundial.xlsx',
+    BASE_DIR / 'Plantilla_Mundial.xlsx',
+])
 
 SPECIAL_FIELDS = [
     ("MejorJugador", "Mejor Jugador"),

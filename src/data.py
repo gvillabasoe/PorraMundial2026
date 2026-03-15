@@ -3,21 +3,35 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from typing import Any
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-from .config import (
-    DATA_PATH,
-    EXACT_RESULT_POINTS,
-    FINAL_TABLE_COLUMNS,
-    GROUPS,
-    MATCH_SIGN_POINTS,
-    RANK_NUMERIC_COLUMNS,
-    SPECIAL_FIELDS,
-    STAGE_CONFIGS,
-    TEAM_SPECIAL_FIELDS,
-)
+try:
+    from .config import (
+        DATA_PATH,
+        EXACT_RESULT_POINTS,
+        FINAL_TABLE_COLUMNS,
+        GROUPS,
+        MATCH_SIGN_POINTS,
+        RANK_NUMERIC_COLUMNS,
+        SPECIAL_FIELDS,
+        STAGE_CONFIGS,
+        TEAM_SPECIAL_FIELDS,
+    )
+except ImportError:
+    from config import (
+        DATA_PATH,
+        EXACT_RESULT_POINTS,
+        FINAL_TABLE_COLUMNS,
+        GROUPS,
+        MATCH_SIGN_POINTS,
+        RANK_NUMERIC_COLUMNS,
+        SPECIAL_FIELDS,
+        STAGE_CONFIGS,
+        TEAM_SPECIAL_FIELDS,
+    )
 
 
 @dataclass
@@ -29,7 +43,14 @@ class MetricResult:
 
 @st.cache_data(show_spinner=False)
 def load_dataframe(data_path: str | None = None) -> pd.DataFrame:
-    path = data_path or str(DATA_PATH)
+    path = Path(data_path) if data_path else DATA_PATH
+    if path is None:
+        raise FileNotFoundError("No se ha encontrado el archivo de datos.")
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"No se ha encontrado el archivo de datos: {path}")
+    if path.suffix.lower() in {'.xlsx', '.xls'}:
+        return pd.read_excel(path)
     return pd.read_csv(path)
 
 
@@ -279,6 +300,14 @@ def longest_run(sequence: list[bool], target: bool) -> int:
 
 
 def build_result_metrics(ranking_df: pd.DataFrame, match_keys: list[str]) -> dict[str, MetricResult]:
+    if ranking_df.empty:
+        empty_metric = MetricResult('Pendiente', 0, 0.0)
+        return {
+            'best_streak': empty_metric,
+            'most_hits': empty_metric,
+            'worst_streak': empty_metric,
+            'least_hits': empty_metric,
+        }
     rows = []
     for _, row in ranking_df.iterrows():
         sequence = participant_exact_sequence(row, match_keys)
